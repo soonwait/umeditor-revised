@@ -221,36 +221,36 @@ UM.plugins['undo'] = function () {
     });
     var isCollapsed = true;
     me.addListener('keydown', function (type, evt) {
-        console.log('undo keydown')
+        // console.log('undo keydown')
         var me = this;
         var keyCode = evt.keyCode || evt.which;
         if (!keys[keyCode] && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey) {
             if (inputType)
                 return;
-            console.log(!me.selection.getRange().collapsed)
+            // console.log(!me.selection.getRange().collapsed)
             if(!me.selection.getRange().collapsed){
                 me.undoManger.save(false,true);
                 isCollapsed = false;
                 return;
             }
-            console.log(1)
+            // console.log(1)
             if (me.undoManger.list.length == 0) {
                 me.undoManger.save(true);
             }
-            console.log(2)
+            // console.log(2)
             clearTimeout(saveSceneTimer);
             function save(cont){
-                console.log(6)
-                console.log(cont.selection.getRange().collapsed)
+                // console.log(6)
+                // console.log(cont.selection.getRange().collapsed)
                 if (cont.selection.getRange().collapsed)
                     cont.fireEvent('contentchange');
                 cont.undoManger.save(false,true);
                 cont.fireEvent('selectionchange');
             }
-            console.log(3)
+            // console.log(3)
             saveSceneTimer = setTimeout(function(){
-                console.log(5)
-                console.log(inputType)
+                // console.log(5)
+                // console.log(inputType)
                 if(inputType){
                     var interalTimer = setInterval(function(){
                         if(!inputType){
@@ -260,29 +260,29 @@ UM.plugins['undo'] = function () {
                     },300)
                     return;
                 }
-                console.log(6)
+                // console.log(6)
                 save(me);
             },200);
-            console.log(4)
+            // console.log(4)
 
             lastKeyCode = keyCode;
             keycont++;
             if (keycont >= maxInputCount ) {
-                console.log(7)
+                // console.log(7)
                 save(me)
             }
         }
     });
     me.addListener('keyup', function (type, evt) {
-        console.log('undo up')
+        // console.log('undo up')
         var keyCode = evt.keyCode || evt.which;
         if (!keys[keyCode] && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey) {
-            console.log('undo up')
+            // console.log('undo up')
             if (inputType)
                 return;
-                console.log('undo up')
+                // console.log('undo up')
             if(!isCollapsed){
-                console.log('undo up')
+                // console.log('undo up')
                 this.undoManger.save(false,true);
                 isCollapsed = true;
             }

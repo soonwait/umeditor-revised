@@ -4,8 +4,11 @@ const CleanWebpackPlugin = require('clean-webpack-plugin');
 
 module.exports = {
     entry: {
+        // 这里要有先后顺序
+        revised: './src/revised/index-umeditor.js',
+        console: './src/revised/um-console.js',
+        instance: './src/revised/um-instance.js',
         app: './src/index.js',
-        console: './src/revised/um-console',
         print: './src/print.js',
         test: './src/test.js'
     },
@@ -19,14 +22,14 @@ module.exports = {
             filename: 'index.html',
             template: './src/index.html',
             inject: 'body',
-            chunks: ['app', 'console']
+            chunks: ['revised', 'console', 'instance', 'app']
         }),
         new HtmlWebpackPlugin({
             title: 'Test',
             filename: 'test.html',
             template: './src/test.html',
             inject: 'body',
-            chunks: ['app', 'test']
+            chunks: ['revised', 'instance', 'test']
         })
     ],
     output: {

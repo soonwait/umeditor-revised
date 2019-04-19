@@ -46,8 +46,8 @@
 });
 
 
-console.log(Object.keys(UM.plugins))
-console.log(Object.keys(UM.commands))
+// console.log(Object.keys(UM.plugins))
+// console.log(Object.keys(UM.commands))
 
 
 
@@ -61,6 +61,11 @@ var domUtils = UM.dom.domUtils;
 
 function Revised(me) {
 
+  const ANONYMOUS = 'anonymous';
+
+  var __user = ANONYMOUS;
+  var __revisedVisible = true;
+
 
   var __toString = function (e) {
     if (typeof e === 'object' && e instanceof Array) {
@@ -70,9 +75,6 @@ function Revised(me) {
       return a + __toString(e);
     }, "") : e.outerHTML;
   };
-
-  var __user = 'any';
-  var __revisedVisible = true;
 
 
   var __isDel = function (node) {
@@ -87,20 +89,59 @@ function Revised(me) {
   var __inIns = function (node) {
     return (node = domUtils.findParentByTagName(node, 'INS', true));
   };
+  var __isEmpty = function (node) {
+    if (!node) return false;
+    else if (node.nodeType === 3) return node.nodeValue.length === 0;
+    else if (node.nodeType === 1) return !node.firstChild || !Array.from(node.childNodes).some(e => !__isEmpty(e));
+    else if (node.nodeType === 11) return node.firstChild || !Array.from(node.childNodes).some(e => !__isEmpty(e));
+    else return false;
+  };
+  // TODO 修改的通用一点
+  var __isPStart = function (node, offset) {
+    if (!node) return false;
+    if (node.nodeType === 3 && offset > 0) return false;
+    if (node === me.body) return node.childNodes[offset];
+    var p = domUtils.findParentByTagName(node, 'P', true);
+    if (node.nodeType === 3) {
+      offset = Array.from(node.parentNode.childNodes).indexOf(node);
+      node = node.parentNode;
+    }
+    while (offset === 0 && node !== p) {
+      offset = Array.from(node.parentNode.childNodes).indexOf(node);
+      node = node.parentNode;
+    }
+    return node === p && offset === 0 && p;
+  };
+
+  var __isPEnd = function (node, offset) {
+    if (!node) return false;
+    if (node.nodeType === 3 && offset < node.nodeValue.length) return false;
+    if (node === me.body) return node.childNodes[offset - 1];
+    var p = domUtils.findParentByTagName(node, 'P', true);
+    if (node.nodeType === 3) {
+      offset = Array.from(node.parentNode.childNodes).indexOf(node) + 1;
+      node = node.parentNode;
+    }
+    while (!node.childNodes[offset] && node !== p) {
+      offset = Array.from(node.parentNode.childNodes).indexOf(node) + 1;
+      node = node.parentNode;
+    }
+    return node === p && offset === node.childNodes.length && p;
+  };
   var __date = function () {
     return new Date().toISOString().substring(0, 16).replace('T', ' ');
   };
 
   var __createDel = function () {
     var del = me.document.createElement('DEL');
-    del.setAttribute('cite', __user);
+    del.setAttribute('cite', __user || ANONYMOUS);
     del.setAttribute('datetime', __date());
     return del;
   };
 
   var __createIns = function (user, datetime) {
     var ins = me.document.createElement('INS');
-    ins.setAttribute('cite', user || __user);
+    ins.setAttribute('cite', user || __user || ANONYMOUS);
     ins.setAttribute('datetime', datetime || __date());
     return ins;
   };
@@ -113,11 +154,11 @@ function Revised(me) {
     if (__revisedVisible) return;
 
     var start = rng.startContainer, end = rng.endContainer;
-    if (!(start.compareDocumentPosition(__root) & Node.DOCUMENT_POSITION_CONTAINS)) {
+    if (!(start.compareDocumentPosition(me.body) & Node.DOCUMENT_POSITION_CONTAINS)) {
       console.warn('selection start is out of editor');
       return;
     }
-    if (!(end.compareDocumentPosition(__root) & Node.DOCUMENT_POSITION_CONTAINS)) {
+    if (!(end.compareDocumentPosition(me.body) & Node.DOCUMENT_POSITION_CONTAINS)) {
       console.warn('selection end is out of editor');
       return;
     }
@@ -126,7 +167,7 @@ function Revised(me) {
       startOffset = Array.from(start.parentNode.childNodes).indexOf(start);
       start = start.parentNode;
       if (start.nodeType === 1 && start.tagName === 'P') break;
-      if (start.nodeType === 1 && start === __root) return;
+      if (start.nodeType === 1 && start === me.body) return;
     }
     if (start.nodeType === 1 && start.tagName === 'P') {
       var prev;
@@ -140,7 +181,7 @@ function Revised(me) {
       endOffset = Array.from(end.parentNode.childNodes).indexOf(end) + 1;
       end = end.parentNode;
       if (end.nodeType === 1 && end.tagName === 'P') break;
-      if (end.nodeType === 1 && end === __root) return;
+      if (end.nodeType === 1 && end === me.body) return;
     }
     if (end.nodeType === 1 && end.tagName === 'P') {
       var next, isntDel = false;
@@ -179,66 +220,71 @@ function Revised(me) {
     if (!bml) return false;
     // 还可以根据range的端点来判断
     // console.log(rng.startContainer, rng.startOffset, rng.endContainer, rng.endOffset);
-    bml = (rng.startContainer === __root && rng.startOffset !== rng.endOffset)
+    bml = (rng.startContainer === me.body && rng.startOffset !== rng.endOffset)
       || ((tmp = domUtils.findParentByTagName(rng.startContainer, 'P')) && tmp !== domUtils.findParentByTagName(rng.endContainer, 'P'));
     return bml;
   };
 
-  
-    /**
-     * 有关选区的处理函数
-     */
-    // TODO 重新整理这个函数，尤其是合并
-    var __visitMultiLineFrag = function (frag) {
-      return Array.from(frag.childNodes).map(p => {
-          // 处理本次被删除的段落里的内容
-          Array.from(p.childNodes).forEach(e => {
-              // 早前已经删除的内容不用管，不管谁删的
-              if (__isDel(e)) {
-                  // NOP
-              }
-              // 如果是自己插入的内容，则直接删除
-              else if ((tmp = __isIns(e)) && __user === tmp.getAttribute('cite')) {
-                  tmp.parentNode.removeChild(tmp);
-              }
-              else if (e.nodeType === 1 && e.tagName === 'IMG') {
-                  var info = me.document.createElement('ABBR');
-                  info.innerText = '[图片已删除]';
-                  info.title = '已删除的图片：' + e.src;
-                  var del = __createDel();
-                  del.appendChild(info);
-                  p.insertBefore(del, e);
-                  p.removeChild(e);
-              }
-              // 其他节点全用删除线包括
-              else {
-                  var del = __createDel();
-                  p.insertBefore(del, e);
-                  del.appendChild(e);
-              }
-          });
-          // 合并相同人和时间的删除标记
-          __mergeDelChilds(p);
-          return p;
+
+  /**
+   * 有关选区的处理函数
+   */
+  // TODO 重新整理这个函数，尤其是合并
+  var __visitMultiLineFrag = function (frag) {
+    return Array.from(frag.childNodes).map(p => {
+      // 处理本次被删除的段落里的内容
+      Array.from(p.childNodes).forEach(e => {
+        // 早前已经删除的内容不用管，不管谁删的
+        if (__isDel(e)) {
+          // NOP
+        }
+        // 如果是自己插入的内容，则直接删除
+        else if ((tmp = __isIns(e)) && __user === tmp.getAttribute('cite')) {
+          tmp.parentNode.removeChild(tmp);
+        }
+        else if (e.nodeType === 1 && e.tagName === 'IMG') {
+          var info = me.document.createElement('ABBR');
+          info.innerText = '[图片已删除]';
+          info.title = '已删除的图片：' + e.src;
+          var del = __createDel();
+          del.appendChild(info);
+          p.insertBefore(del, e);
+          p.removeChild(e);
+        }
+        // 其他节点全用删除线包括
+        else {
+          var del = __createDel();
+          p.insertBefore(del, e);
+          del.appendChild(e);
+        }
       });
+      // 合并相同人和时间的删除标记
+      var next = p.firstChild;
+      while (next) {
+        dom.merge(next, true);
+        next = next.nextSibling;
+      }
+
+      return p;
+    });
   };
 
   var __visitMultiBlockFrag = function (frag) {
-      Array.from(frag.childNodes).forEach(e => {
-          if (__isDel(e)) {
-              dom.merge(e, false, true);
-          }
-          else if ((tmp = __isIns(e)) && __user === tmp.getAttribute('cite')) {
-              frag.removeChild(tmp);
-          }
-          else {
-              var del = __createDel();
-              frag.insertBefore(del, e);
-              del.appendChild(e);
-              dom.merge(del, false, true);
-          }
-      });
-      return Array.from(frag.childNodes);
+    Array.from(frag.childNodes).forEach(e => {
+      if (__isDel(e)) {
+        dom.merge(e, false, true);
+      }
+      else if ((tmp = __isIns(e)) && __user === tmp.getAttribute('cite')) {
+        frag.removeChild(tmp);
+      }
+      else {
+        var del = __createDel();
+        frag.insertBefore(del, e);
+        del.appendChild(e);
+        dom.merge(del, false, true);
+      }
+    });
+    return Array.from(frag.childNodes);
   };
   var __shrink = function () {
     var sel = me.document.getSelection();
@@ -246,45 +292,45 @@ function Revised(me) {
     var rng = sel.getRangeAt(0);
     var start = rng.startContainer, startOffset = rng.startOffset;
     while (start.nodeType === 1 && start.firstChild) {
-        if (startOffset >= start.childNodes.length) {
-            start = start.lastChild;
-            startOffset = start.nodeType === 3 ? start.nodeValue.length : start.childNodes.length;
-        } else {
-            start = start.childNodes[startOffset];
-            startOffset = 0;
-        }
+      if (startOffset >= start.childNodes.length) {
+        start = start.lastChild;
+        startOffset = start.nodeType === 3 ? start.nodeValue.length : start.childNodes.length;
+      } else {
+        start = start.childNodes[startOffset];
+        startOffset = 0;
+      }
     }
     if (rng.collapsed) {
-        if (start !== rng.startContainer) {
-            rng.setStart(start, startOffset);
-            rng.collapse(true);
-            mobile.fixSelectionRange(sel, rng);
-        }
-        return;
+      if (start !== rng.startContainer) {
+        rng.setStart(start, startOffset);
+        rng.collapse(true);
+        mobile.fixSelectionRange(sel, rng);
+      }
+      return;
     }
     var end = rng.endContainer, endOffset = rng.endOffset;
     while (end.nodeType === 1 && end.firstChild) {
-        if (endOffset >= end.childNodes.length) {
-            end = end.lastChild;
-            endOffset = end.nodeType === 3 ? end.nodeValue.length : end.childNodes.length;
-        } else if (endOffset === 0 && end.previousSibling) { // TODO
-            end = end.previousSibling;
-            endOffset = end.nodeType === 3 ? end.nodeValue.length : end.childNodes.length;
-        } else if (end.childNodes[endOffset - 1]) {
-            end = end.childNodes[endOffset - 1];
-            endOffset = end.nodeType === 3 ? end.nodeValue.length : end.childNodes.length;
-        } else { // TODO
-            end = end.childNodes[endOffset];
-            endOffset = 0;
-        }
+      if (endOffset >= end.childNodes.length) {
+        end = end.lastChild;
+        endOffset = end.nodeType === 3 ? end.nodeValue.length : end.childNodes.length;
+      } else if (endOffset === 0 && end.previousSibling) { // TODO
+        end = end.previousSibling;
+        endOffset = end.nodeType === 3 ? end.nodeValue.length : end.childNodes.length;
+      } else if (end.childNodes[endOffset - 1]) {
+        end = end.childNodes[endOffset - 1];
+        endOffset = end.nodeType === 3 ? end.nodeValue.length : end.childNodes.length;
+      } else { // TODO
+        end = end.childNodes[endOffset];
+        endOffset = 0;
+      }
     }
     if (start !== rng.startContainer || end !== rng.endContainer) {
-        if (start !== rng.startContainer) rng.setStart(start, startOffset);
-        if (end !== rng.endContainer) rng.setEnd(end, endOffset);
-        // rng.collapse(true);
-        mobile.fixSelectionRange(sel, rng);
+      if (start !== rng.startContainer) rng.setStart(start, startOffset);
+      if (end !== rng.endContainer) rng.setEnd(end, endOffset);
+      // rng.collapse(true);
+      mobile.fixSelectionRange(sel, rng);
     }
-};
+  };
 
 
   var __deleteSelection = function (cursorToStart) {
@@ -356,8 +402,8 @@ function Revised(me) {
       // 1. 从某行首开始删的，插入在此行之前
       // 2. 从某行中开始删的，先拆此行，然后插入在后行之前
       var dps = __visitMultiLineFrag(frag); // deleted p lines
-      var pnext = delFromPHead || dom.breakParent(start, rng.startOffset, p);
-      Array.from(dps).reverse().forEach(p => pnext = __root.insertBefore(p, pnext));
+      var pnext = delFromPHead || dom.breakParent(start, rng.startOffset, me.body, true);
+      Array.from(dps).reverse().forEach(p => pnext = me.body.insertBefore(p, pnext));
 
       // 整理焦点
       if (cursorToStart) {
@@ -612,37 +658,33 @@ function Revised(me) {
     me.document.execCommand('insertHtml', false, '&nbsp;');
   };
 
+  // 只有backspace和delete键需要处理sync的场景保存，而且前提是，undo.js中要解封
+  // 注意：这里sync保存场景的一个不良结果是，连续删除的时候每一个字都有一次记录
+  //       所以这里只测试了chrome下的判断，只有按键hold住之前的第一次触发才sync
+  // 注意：开头和结尾的两次保存都是必须的，否则少一步回退
   var __backspace = function (evt) {
     domUtils.preventDefault(evt);
-    // 注意：这里直接保存场景的一个不良结果是，连续删除的时候每一个字都有一次记录
-    __saveScene(true);
+    var sync = !evt.originalEvent.repeat;
+    __saveScene(sync);
 
     var rng = me.selection.getRange();
     if (rng.collpased && rng.startOffset === 0 && domUtils.isBondaryNode(rng.startContainer, 'firstChild')) return;
     else me.selection.getNative().modify('extend', 'backward', 'character');
-
     __deleteSelection(true);
-    // 注意：这里直接保存场景的一个不良结果是，连续删除的时候每一个字都有一次记录
-    // 注意：开头那个保存和这个保存都是必须的
-    __saveScene(true);
+    __saveScene(sync);
   };
 
   var __delete = function (evt) {
     domUtils.preventDefault(evt);
-    // 注意：这里直接保存场景的一个不良结果是，连续删除的时候每一个字都有一次记录
-    __saveScene(true);
+    var sync = !evt.originalEvent.repeat;
+    __saveScene(sync);
 
     var rng = me.selection.getRange();
     if (rng.collpased && rng.startOffset === 0 && domUtils.isBondaryNode(rng.startContainer, 'firstChild')) return;
     else me.selection.getNative().modify('extend', 'forward', 'character');
-
     __deleteSelection(false);
-    // 注意：这里直接保存场景的一个不良结果是，连续删除的时候每一个字都有一次记录
-    // 注意：开头那个保存和这个保存都是必须的
-    __saveScene(true);
+    __saveScene(sync);
   };
-
-
 
 
 
@@ -650,7 +692,7 @@ function Revised(me) {
    * Event 事件专区
    */
   var __keydown = function (evt) {
-    console.log('revised key')
+    // console.log('revised key')
     var keyCode = evt.keyCode || evt.which;
 
     if (dom.isChar(evt)) {
@@ -670,18 +712,74 @@ function Revised(me) {
     }
   };
 
+  // 输入法
+  var __compStart = function (evt) {
+    console.log('composition start', evt, evt.data)
+    __saveScene(true);
+    __deleteSelection();
+    __insert();
+  };
+  var __compUpdate = function (evt) {
+    // NOP
+  };
+  var __compEnd = function (evt) {
+    console.log('composition end', evt, evt.data)
+    // 好像浏览器自己会做
+    // if (evt.data.length === 0) __cancelInsert();
+    __saveScene(true);
+  };
 
   /**
    * 成员专区
    */
   this.keydown = __keydown;
+  this.compStart = __compStart;
+  this.compEnd = __compEnd;
+
+  this.setUser = function (user) {
+    __user = user || ANONYMOUS;
+  };
+  this.setUsers = function (users) {
+    var str = Array.prototype.map.call(users || [], user => `
+      *[cite="${user.id}"],*[cite="${user.id}"] { color: ${user.color}; }
+      del,ins {
+          position: relative;
+      }
+      del:hover:before,
+      ins:hover:before {
+          position: fixed;
+          left: 2px;
+          bottom: 1px;
+          background-color: rgba(0,0,0,0.6);
+          color: white;
+          padding: 3px 6px;
+          font-size: xx-small;
+      }
+      del:hover:before {
+          content: attr(cite)" 删除于 "attr(datetime);
+      }
+      ins:hover:before {
+          content: attr(cite)" 添加于 "attr(datetime);
+      }
+    `).join('\n');
+    utils.cssRule('revised', str, me.document);
+  }
 }
 
-
+var utils = UM.utils;
 UM.plugins["revised"] = function () {
   var me = this;
   var rev = new Revised(me);
 
+  me.addListener('ready', function (type, evt) {
+    var revised;
+    if (revised = me.options.revised) {
+      rev.setUser(revised.currentUser);
+      rev.setUsers(revised.users);
+    }
+    me.body.addEventListener('compositionstart', rev.compStart, false);
+    me.body.addEventListener('compositionend', rev.compEnd, false);
+  });
   me.addListener('keydown', function (type, evt) {
     rev.keydown(evt);
   });

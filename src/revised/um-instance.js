@@ -45,6 +45,15 @@ var serverPath = 'https://ueditor.baidu.com/server/umeditor/',
       "video", //插入视频
       "xssFilter" //xss过滤器
     ],
+    revised: {
+      currentUser: 'veiky',
+      users: [
+        { id: 'anonymous', name: 'anonymous', color: 'blue' },
+        { id: 'veiky', name: 'veiky', color: 'red' },
+        { id: 'sun', name: 'sun', color: 'blue' },
+        { id: 'soonwait', name: 'soonwait', color: 'green' }
+      ]
+    }
   });
 
 module.exports = um;
