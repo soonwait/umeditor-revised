@@ -47,7 +47,7 @@ module.exports = {
         // 从哪里提供bundle.js，默认/，表示的是http相对路径，指向contentBase下
         // publicPath: "/assets/",
         // or []
-        contentBase: path.join(__dirname, "docs"),
+        contentBase: [path.join(__dirname, "docs"), path.join(__dirname, "assets")],
         // watchContentBase: true,
         // watchOptions: {
         //     poll: true

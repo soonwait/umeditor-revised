@@ -32,8 +32,8 @@
   "video", //插入视频
   "xssFilter" //xss过滤器
 ].forEach(function (name) {
-  if (!!UM.plugins[name])
-    delete UM.plugins[name];
+  // if (!!UM.plugins[name])
+  delete UM.plugins[name];
 });
 
 
@@ -50,16 +50,12 @@
 // console.log(Object.keys(UM.commands))
 
 
-
-
-
-
 var mobile = require('./mobile');
 var dom = require('./dom');
 
-var domUtils = UM.dom.domUtils;
-
 function Revised(me) {
+
+  var domUtils = UM.dom.domUtils;
 
   const ANONYMOUS = 'anonymous';
 
@@ -219,9 +215,9 @@ function Revised(me) {
     bml = Array.from(frag.childNodes).reduce((a, c) => a && c.nodeType === 1 && c.tagName === 'P', true);
     if (!bml) return false;
     // 还可以根据range的端点来判断
-    // console.log(rng.startContainer, rng.startOffset, rng.endContainer, rng.endOffset);
+    console.log(rng.startContainer, rng.startOffset, rng.endContainer, rng.endOffset);
     bml = (rng.startContainer === me.body && rng.startOffset !== rng.endOffset)
-      || ((tmp = domUtils.findParentByTagName(rng.startContainer, 'P')) && tmp !== domUtils.findParentByTagName(rng.endContainer, 'P'));
+      || ((tmp = domUtils.findParentByTagName(rng.startContainer, 'P', true)) && tmp !== domUtils.findParentByTagName(rng.endContainer, 'P', true));
     return bml;
   };
 
@@ -356,17 +352,21 @@ function Revised(me) {
       cursorToStart = sel.focusNode === start && sel.focusOffset === rng.startOffset;
     }
 
-    __includeInvisibles(sel, rng);
-    rng = sel.getRangeAt(0);
-    start = rng.startContainer;
-    end = rng.endContainer;
-    console.log('before delete ... include invisible\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
+    if (!__revisedVisible) {
+      __includeInvisibles(sel, rng);
+      rng = sel.getRangeAt(0);
+      start = rng.startContainer;
+      end = rng.endContainer;
+      console.log('before delete ... include invisible\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
+    }
+
     var frag = rng.cloneContents();
     Array.from(frag.childNodes).forEach((e, i) => {
-      // console.log(`frag[${i}]`, __toString(e));
+      console.log(`frag[${i}]`, __toString(e));
     });
 
     var mline = __isMultiLineSelection(), mblock = (start !== end);
+    console.log('mline', mline)
     // 跨行删除
     if (mline) {
       // TODO 如果删除的是跨行符，需要考虑
@@ -396,7 +396,7 @@ function Revised(me) {
       rng = sel.getRangeAt(0);
       start = rng.startContainer;
       end = rng.endContainer;
-      // console.log('after delete\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
+      console.log('after delete\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
 
       // 插入<p><del></p>
       // 1. 从某行首开始删的，插入在此行之前
@@ -621,16 +621,29 @@ function Revised(me) {
       me.fireEvent('selectionchange');
       __timer = null;
     }, 300);
-  }
+  };
+
+  var __selectionText = function () {
+    var sel = me.document.getSelection();
+    if (!sel || sel.rangeCount === 0) return '';
+
+    var rng = sel.getRangeAt(0);
+    if (!rng) return '';
+    return rng.cloneContents().textContent;
+  };
+
+
 
   var __char = function (evt) {
-    // domUtils.preventDefault(evt);
+    if (!me.document.getSelection().isCollapsed) {
+      __saveScene(true);
+      __deleteSelection();
+    }
     __saveScene();
     __insert();
   };
 
   var __enter = function (evt) {
-    // domUtils.preventDefault(evt);
     __saveScene();
     __insert();
   };
@@ -664,37 +677,44 @@ function Revised(me) {
   // 注意：开头和结尾的两次保存都是必须的，否则少一步回退
   var __backspace = function (evt) {
     domUtils.preventDefault(evt);
-    var sync = !evt.originalEvent.repeat;
+    var sync = !evt.repeat;
     __saveScene(sync);
 
     var rng = me.selection.getRange();
     if (rng.collpased && rng.startOffset === 0 && domUtils.isBondaryNode(rng.startContainer, 'firstChild')) return;
-    else me.selection.getNative().modify('extend', 'backward', 'character');
+    else if(rng.collapsed) me.selection.getNative().modify('extend', 'backward', 'character');
     __deleteSelection(true);
     __saveScene(sync);
   };
 
   var __delete = function (evt) {
     domUtils.preventDefault(evt);
-    var sync = !evt.originalEvent.repeat;
+    var sync = !evt.repeat;
     __saveScene(sync);
 
     var rng = me.selection.getRange();
     if (rng.collpased && rng.startOffset === 0 && domUtils.isBondaryNode(rng.startContainer, 'firstChild')) return;
-    else me.selection.getNative().modify('extend', 'forward', 'character');
+    else if(rng.collapsed) me.selection.getNative().modify('extend', 'forward', 'character');
     __deleteSelection(false);
     __saveScene(sync);
   };
 
 
 
+
+
+
+
+
+
+
   /**
    * Event 事件专区
+   * 字符输入
    */
   var __keydown = function (evt) {
-    // console.log('revised key')
+    console.log('revised keydown', evt)
     var keyCode = evt.keyCode || evt.which;
-
     if (dom.isChar(evt)) {
       __char(evt);
     }
@@ -704,17 +724,23 @@ function Revised(me) {
     else if (keyCode === 32) {
       __space(evt);
     }
-    else if (keyCode == 8) {
+    else if (keyCode === 8) {
       __backspace(evt);
     }
-    else if (keyCode == 46) {
+    else if (keyCode === 46) {
       __delete(evt);
     }
+    else if (evt.ctrlKey && (keyCode === 66 || keyCode === 73 || keyCode === 85)) {
+      // TODO 暂时屏蔽 ctrl+b ctrl+i ctrl+u
+      domUtils.preventDefault(evt);
+    }
   };
-
-  // 输入法
+  /**
+   * Event 事件专区
+   * 输入法
+   */
   var __compStart = function (evt) {
-    console.log('composition start', evt, evt.data)
+    console.log('revised composition start', evt)
     __saveScene(true);
     __deleteSelection();
     __insert();
@@ -723,11 +749,94 @@ function Revised(me) {
     // NOP
   };
   var __compEnd = function (evt) {
-    console.log('composition end', evt, evt.data)
+    console.log('revised composition end', evt)
     // 好像浏览器自己会做
     // if (evt.data.length === 0) __cancelInsert();
     __saveScene(true);
   };
+  /**
+   * Event 事件专区
+   * 拷贝\剪切\粘贴
+   * TODO 暂只支持纯文本
+   */
+  var __copy = function (evt, cut) {
+    if (!cut) console.log('revised copy', evt);
+    domUtils.preventDefault(evt);
+    var data = evt.clipboardData;
+    var text = __selectionText();
+    if (!data || !text) return false;
+
+    data.clearData();
+    data.setData('text/plain', text);
+    return true;
+  };
+  var __cut = function (evt) {
+    console.log('revised cut', evt);
+    if (!__copy(evt, true)) return false;
+
+    __saveScene(true);
+    __deleteSelection();
+    __saveScene(true);
+    return true;
+  };
+  var __paste = function (evt) {
+    console.log('revised paste', evt);
+    domUtils.preventDefault(evt);
+    var data = evt.clipboardData;
+    var text = data.getData('text/plain');
+    if (!data || !text || text === __selectionText()) return false;
+
+    __saveScene(true);
+    __insert();
+    // TODO 考虑不考虑me.execCommand ??
+    me.document.execCommand('insertHtml', false, text);
+    __saveScene(true);
+    return true;
+  }
+  /**
+   * Event 事件专区
+   * 拖拽\拖放
+   * 使用BeforeInput解决了
+   */
+  // 注意: 很难用drag和drop本身来解决
+  // 因为一直得不到文字放下的那个位置range
+  // drop然后dragend的时候选区还是原来的
+  var __drag = function (evt) { };
+  var __drop = function (evt) { };
+  var __input = function (evt) {
+    if (evt.type === 'beforeinput') {
+      console.log('revised beforeinput', evt.inputType, evt);
+      // 其实大部分的输入都可以在这里处理
+      // 但是要先确保这个时间是cancelable = Yes
+
+      // ctrl + backspace 造成的删除
+      if (evt.inputType === 'deleteWordBackward') { } // cancelable = undefined
+      // backspace 造成的删除
+      else if (evt.inputType === 'deleteContentBackward') { } // cancelable = undefined
+      // ctrl + delete 造成的删除
+      else if (evt.inputType === 'deleteWordForward') { } // cancelable = undefined
+      // delete 造成的删除
+      else if (evt.inputType === 'deleteContentForward') { } // cancelable = undefined
+
+      // 拖拽造成的删除
+      else if (evt.inputType === 'deleteByDrag') { // cancelable = Yes
+        __saveScene(true);
+        __deleteSelection();
+        domUtils.preventDefault(evt);
+      }
+      // 拖放造成的插入
+      else if (evt.inputType === 'insertFromDrop') { // cancelable = Yes
+        var data = evt.dataTransfer, text;
+        if (data && (text = data.getData('text/plain'))) {
+          __insert();
+          me.document.execCommand('insertHtml', false, text);
+          __saveScene();
+        }
+        domUtils.preventDefault(evt);
+      }
+    }
+  };
+
 
   /**
    * 成员专区
@@ -735,6 +844,20 @@ function Revised(me) {
   this.keydown = __keydown;
   this.compStart = __compStart;
   this.compEnd = __compEnd;
+  this.copy = __copy;
+  this.cut = __cut;
+  this.paste = __paste;
+  this.input = __input;
+
+
+
+  var __enabled = true;
+  this.setEnable = function (enabled) {
+    __enabled = enabled;
+  };
+  this.isEnable = function () {
+    return __enabled;
+  };
 
   this.setUser = function (user) {
     __user = user || ANONYMOUS;
@@ -762,14 +885,41 @@ function Revised(me) {
           content: attr(cite)" 添加于 "attr(datetime);
       }
     `).join('\n');
+    var utils = UM.utils;
     utils.cssRule('revised', str, me.document);
   }
 }
 
-var utils = UM.utils;
+var __cache = {};
+/**
+ * @returns {Revised}
+ */
+Revised.get = function (me) {
+  return __cache[me.uid] || (__cache[me.uid] = new Revised(me));
+};
+
+
+
+
+/**
+ * 工具条按钮
+ */
+var REVISED_BUTTONS_CSS = '\
+\
+.edui-btn-toolbar .edui-btn-review-track-changes .edui-icon-review-track-changes {\
+  background: center/contain no-repeat url(./track-changes.svg) transparent;\
+}\
+\
+';
+/**
+ * 插件代码
+ */
 UM.plugins["revised"] = function () {
   var me = this;
-  var rev = new Revised(me);
+  var rev = Revised.get(me);
+  var utils = UM.utils;
+
+  utils.cssRule('revised-buttons', REVISED_BUTTONS_CSS, me.document);
 
   me.addListener('ready', function (type, evt) {
     var revised;
@@ -777,13 +927,44 @@ UM.plugins["revised"] = function () {
       rev.setUser(revised.currentUser);
       rev.setUsers(revised.users);
     }
+    // me.addListener('keydown', function (type, evt) {
+    //   rev.keydown(evt);
+    // });
+    me.body.addEventListener('keydown', rev.keydown, false);
     me.body.addEventListener('compositionstart', rev.compStart, false);
     me.body.addEventListener('compositionend', rev.compEnd, false);
-  });
-  me.addListener('keydown', function (type, evt) {
-    rev.keydown(evt);
+    me.body.addEventListener('beforeinput', rev.input, false);
+    me.body.addEventListener('copy', rev.copy, false);
+    me.body.addEventListener('cut', rev.cut, false);
+    me.body.addEventListener('paste', rev.paste, false);
   });
 };
 
-// 重新添加`undo`插件，以便让它排在我们的事件监听之后 `keydown`
+
+UM.registerUI('review-track-changes', function (name) {
+  var me = this,
+    rev = Revised.get(me),
+    title = function (name) {
+      switch (name) {
+        case 'review-track-changes':
+          return me.options.lang === "zh-cn" ? "修订" : "Track Changes";
+      }
+    },
+    $button = $.eduibutton({
+      icon: name,
+      title: title(name),
+      click: function () {
+        rev && rev.setEnable(!rev.isEnable())
+        $button.edui().active(rev && rev.isEnable());
+      }
+    });
+
+  $button.edui().active(rev && rev.isEnable());
+  return $button;
+});
+
+
+// 重新添加`undo`插件，以便让它排在我们的事件 `keydown` 监听之后
 require('./um-plugins/undo');
+
+module.exports = Revised;

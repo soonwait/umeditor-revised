@@ -42,7 +42,7 @@ function formatXml(xml) {
     }
     // ---
 
-    var single = Boolean(ln.match(/<.+\/>/)); // is this line a single tag? ex. <br />
+    var single = Boolean(ln.match(/<.+\/>/) || ln.match(/<br>/)); // is this line a single tag? ex. <br />
     var closing = Boolean(ln.match(/<\/.+>/)); // is this a closing tag? ex. </a>
     var opening = Boolean(ln.match(/<[^!].*>/)); // is this even a tag (that's not <!something>)
     var type = single ? 'single' : closing ? 'closing' : opening ? 'opening' : 'other';
@@ -135,5 +135,6 @@ UM.plugins["um-console"] = function () {
     el = document.getElementById('um_console_pre_2')
     el && (el.innerText = formatXml(getBody().split('</p><p').join('</p>\n<p')));
   }
-  me.addListener('contentChange click', spyHandler);
+  setInterval(spyHandler, 500)
+  // me.addListener('contentChange click', spyHandler);
 };

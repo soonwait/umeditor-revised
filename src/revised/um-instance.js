@@ -17,7 +17,7 @@ var serverPath = 'https://ueditor.baidu.com/server/umeditor/',
     //     '| horizontal print preview fullscreen', 'drafts', 'formula'
     // ],
     // toolbar: ['source | undo redo | selectall cleardoc | bold italic underline | justifyleft justifycenter justifyright | emotion image video map | horizontal print preview fullscreen'],
-    toolbar: ['undo redo | bold italic underline'],
+    toolbar: ['undo redo | bold italic underline | review-track-changes'],
     // excludePlugins: ["justify", "font", "link", "paragraph", "horizontal", "undo", "paste", "list", "source", "enterkey", "basestyle", "video", "selectall", "removeformat", "keystrokes", "autosave", "autoupload", "formula", "xssFilter"],
     excludePlugins: [
       "autosave", //自动保存草稿
