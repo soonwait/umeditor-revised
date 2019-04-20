@@ -19,6 +19,7 @@ um.ready(function () {
   // 
   // ................未完
   um.setContent('<p>中共中央总书记</p>');
+  um.setContent('<p>中共中央总书记<r></r></p><p>中共中央总书记<r></r></p><p>中共中央总书记<r></r></p>');
   return;
   // 2.1 单行单插入标签
   um.setContent('<p><ins cite="anonymous" datetime="2019-04-18 18:37">中共</ins>中央总书记</p>');

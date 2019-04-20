@@ -87,7 +87,7 @@ function Revised(me) {
   };
   var __isEmpty = function (node) {
     if (!node) return false;
-    else if (node.nodeType === 3) return node.nodeValue.length === 0;
+    else if (node.nodeType === 3) return node.nodeValue.replace(/\u200B|\u3000/gi, '').length === 0;
     else if (node.nodeType === 1) return !node.firstChild || !Array.from(node.childNodes).some(e => !__isEmpty(e));
     else if (node.nodeType === 11) return node.firstChild || !Array.from(node.childNodes).some(e => !__isEmpty(e));
     else return false;
@@ -379,9 +379,20 @@ function Revised(me) {
       if (frag.childNodes.length === 0) {
         // if (frag.childNodes.length === 2 && __isEmpty(frag.firstChild) && __isEmpty(frag.lastChild)) {
         // 删除空行
-        console.info('delete a line seperator');
+        // console.info('delete a line seperator');
+        // me.document.execCommand('delete', false, null);
         rng.collapse(cursorToStart);
         mobile.fixSelectionRange(sel, rng);
+        // RRRRRRRRRRRR
+        // rng = sel.getRangeAt(0);
+        // start = rng.startContainer;
+        // end = rng.endContainer;
+        // console.log('after delete line seperator\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
+        // if(start && start.nodeType === 1 && start.tagName === 'R') {
+        //   var del = __createDel();
+        //   start.replaceWith(del);
+        //   del.appendChild(start);
+        // }
         return;
       }
 
@@ -579,6 +590,14 @@ function Revised(me) {
     var now = __date();
     if ((tmp = __inIns(start)) && __user === tmp.getAttribute('cite') && now === tmp.getAttribute('datetime')) {
       // NOP
+      //RRRRRRRRRRRRRRRR
+      if ((tmp = tmp.firstChild) && !tmp.nextSibling && tmp.nodeType === 1 && tmp.tagName === 'R') {
+        tmp.parentNode.insertBefore(me.document.createTextNode(domUtils.fillChar), tmp);
+        rng.setStart(tmp.previousSibling, 0);
+        rng.setEnd(tmp.previousSibling, 1);
+        // rng.collapse(true);
+        mobile.fixSelectionRange(sel, rng);
+      }
     }
     else {
       var p = domUtils.findParentByTagName(start, 'P', true);
@@ -643,9 +662,50 @@ function Revised(me) {
     __insert();
   };
 
+  // TODO 添加新行暂时用<r>来处理, 添加已经没有问题了,删除还有问题
   var __enter = function (evt) {
-    __saveScene();
-    __insert();
+    // __saveScene();
+    // __insert();
+    // RRRRRRRRRRRRRRRRRRR
+    domUtils.preventDefault(evt);
+
+    var sel = me.document.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    var rng = sel.getRangeAt(0);
+    if (!rng.collapsed) {
+      __saveScene(true);
+      __deleteSelection();
+    }
+
+    var start = rng.startContainer, offset = rng.startOffset, tmp;
+    if (start === me.body) {
+      start = start.childNodes[rng.startOffset];
+      offset = 0;
+    }
+    var p = domUtils.findParentByTagName(start, 'P', true);
+    if (!p) { console.warn('not in p'); return; }
+    var pnext = p === start ? p : dom.breakParent(start, rng.startOffset, p);
+    if (p === pnext) {
+      var ins = __createIns();
+      ins.appendChild(me.document.createTextNode(domUtils.fillChar));
+      ins.appendChild(me.document.createElement('R'));
+      var pnw = me.document.createElement('P');
+      pnw.appendChild(ins);
+      p.parentNode.insertBefore(pnw, p);
+    }
+    else if (pnext) {
+      var ins = __createIns();
+      ins.appendChild(me.document.createElement('R'));
+      p.appendChild(ins);
+      if (__isEmpty(pnext)) {
+        pnext.insertBefore(me.document.createTextNode(domUtils.fillChar), pnext.firstChild);
+      }
+    }
+    rng.setStart(pnext, 0);
+    rng.collapse(true);
+    __shrink();
+    mobile.fixSelectionRange(sel, rng);
+    __saveScene(true);
   };
 
   var __space = function (evt) {
@@ -682,7 +742,7 @@ function Revised(me) {
 
     var rng = me.selection.getRange();
     if (rng.collpased && rng.startOffset === 0 && domUtils.isBondaryNode(rng.startContainer, 'firstChild')) return;
-    else if(rng.collapsed) me.selection.getNative().modify('extend', 'backward', 'character');
+    else if (rng.collapsed) me.selection.getNative().modify('extend', 'backward', 'character');
     __deleteSelection(true);
     __saveScene(sync);
   };
@@ -694,7 +754,7 @@ function Revised(me) {
 
     var rng = me.selection.getRange();
     if (rng.collpased && rng.startOffset === 0 && domUtils.isBondaryNode(rng.startContainer, 'firstChild')) return;
-    else if(rng.collapsed) me.selection.getNative().modify('extend', 'forward', 'character');
+    else if (rng.collapsed) me.selection.getNative().modify('extend', 'forward', 'character');
     __deleteSelection(false);
     __saveScene(sync);
   };
@@ -908,6 +968,9 @@ var REVISED_BUTTONS_CSS = '\
 \
 .edui-btn-toolbar .edui-btn-review-track-changes .edui-icon-review-track-changes {\
   background: center/contain no-repeat url(./track-changes.svg) transparent;\
+}\
+r:after {\
+  content: \'\\21B5\'\
 }\
 \
 ';
