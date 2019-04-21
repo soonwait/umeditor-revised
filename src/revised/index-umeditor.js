@@ -122,7 +122,12 @@ function Revised(me) {
       offset = Array.from(node.parentNode.childNodes).indexOf(node) + 1;
       node = node.parentNode;
     }
-    return node === p && offset === node.childNodes.length && p;
+    // return node === p && offset === node.childNodes.length && p;
+    //RRRRRRRRRRRRR
+    return (
+      (node === p && offset === node.childNodes.length) ||
+      (node.parentNode === p && __isRRR(node.nextSibling))
+    ) && p;
   };
   var __date = function () {
     return new Date().toISOString().substring(0, 16).replace('T', ' ');
@@ -142,9 +147,40 @@ function Revised(me) {
     return ins;
   };
 
+  // RRRRRRRRRRR
+  // 将行尾的不可见的<R>元素包含进来, 也包括<del><R></del>,<ins><R></ins>,<del><ins><R></ins></del>
+  function __isR(node) {
+    return node && node.nodeType === 1 && node.tagName === 'R';
+  }
+  function __isInsR(node) {
+    return node && node.nodeType === 1 && node.tagName === 'INS' && node.firstChild && node.firstChild === node.lastChild && __isR(node.firstChild);
+  }
+  function __isDelR(node) {
+    return node && node.nodeType === 1 && node.tagName === 'DEL' && node.firstChild && node.firstChild === node.lastChild && (__isR(node.firstChild) || __isInsR(node.firstChild));
+  }
+  var __isRRR = function (node) {
+    return __isR(node) || __isDelR(node) || __isInsR(node);
+  }
+  var __includeRRR = function (sel, rng) {
 
+    var _end = rng.endContainer, _endOffset = rng.endOffset;
+    if (_end && _endOffset >= (_end.nodeType === 3 ? _end.nodeValue.length : _end.childNodes.length)) {
+      while (_end && _endOffset >= (_end.nodeType === 3 ? _end.nodeValue.length : _end.childNodes.length)) {
+        if (_end.nodeType === 1 && _end.tagName === 'P') break;
+        _endOffset = Array.from(_end.parentNode.childNodes).indexOf(_end) + 1;
+        _end = _end.parentNode;
+      }
+      // console.log(__toString(_end))
+      // console.log(__toString(_end.nextSibling))
+      var next = _end.childNodes[_endOffset];
+      if (__isRRR(next)) {
+        rng.setEndAfter(next);
+        mobile.fixSelectionRange(sel, rng);
+      }
+    }
+  };
 
-
+  // 将选区两头不可见的<ins><del>包含进来
   var __includeInvisibles = function (sel, rng) {
     // if (document.revisedVisible) return;
     if (__revisedVisible) return;
@@ -359,6 +395,11 @@ function Revised(me) {
       end = rng.endContainer;
       console.log('before delete ... include invisible\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
     }
+    //RRRRRRRRRRRRRRRRRRRRR
+    __includeRRR(sel, rng);
+    rng = sel.getRangeAt(0);
+    start = rng.startContainer;
+    end = rng.endContainer;
 
     var frag = rng.cloneContents();
     Array.from(frag.childNodes).forEach((e, i) => {
@@ -372,35 +413,68 @@ function Revised(me) {
       // TODO 如果删除的是跨行符，需要考虑
       // 1. backward时，如果这一行的开头是新插入的文字，则合并这行到上一行
       // 2. forward时，如果下一行的开头是新插入的文字，则将下一行合并到这一行尾
-      if (__isEmpty(frag.firstChild) && __isEmpty(frag.lastChild)) {
-        frag.removeChild(frag.lastChild);
-        frag.removeChild(frag.firstChild);
-      }
-      if (frag.childNodes.length === 0) {
-        // if (frag.childNodes.length === 2 && __isEmpty(frag.firstChild) && __isEmpty(frag.lastChild)) {
-        // 删除空行
-        // console.info('delete a line seperator');
-        // me.document.execCommand('delete', false, null);
-        rng.collapse(cursorToStart);
-        mobile.fixSelectionRange(sel, rng);
-        // RRRRRRRRRRRR
-        // rng = sel.getRangeAt(0);
-        // start = rng.startContainer;
-        // end = rng.endContainer;
-        // console.log('after delete line seperator\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
-        // if(start && start.nodeType === 1 && start.tagName === 'R') {
-        //   var del = __createDel();
-        //   start.replaceWith(del);
-        //   del.appendChild(start);
-        // }
-        return;
-      }
+
+      // t to t
+      // frag[0] <p><r></r></p>
+      // frag[1] <p>中共中央总书记<r></r></p>
+      // t to m
+      // frag[0] <p><r></r></p>
+      // frag[1] <p>中共中央总</p>
+      // t to h
+      // frag[0] <p><r></r></p>
+      // frag[1] <p></p>
+      // frag[0] <p><r></r></p>
+      // frag[1] <p>中共中央总书记<r></r></p>
+      // frag[2] <p></p>
+      // m to t
+      // frag[0] <p>总书记<r></r></p>
+      // frag[1] <p>中共中央总书记<r></r></p>
+      // m to m
+      // frag[0] <p>总书记<r></r></p>
+      // frag[1] <p>中共中央</p>
+      // m to h
+      // frag[0] <p>总书记<r></r></p>
+      // frag[1] <p></p>
+      // h to t
+      // frag[0] <p>中共中央总书记<r></r></p>
+      // frag[1] <p>中共中央总书记<r></r></p>
+      // h to m
+      // frag[0] <p>中共中央总书记<r></r></p>
+      // frag[1] <p>中共中央</p>
+      // h to h
+      // frag[0] <p>中共中央总书记<r></r></p>
+      // frag[1] <p></p>
+//RRRRRRRR
+      // if (__isEmpty(frag.firstChild) && __isEmpty(frag.lastChild)) {
+      //   frag.removeChild(frag.lastChild);
+      //   frag.removeChild(frag.firstChild);
+      // }
+      // if (frag.childNodes.length === 0) {
+      //   // if (frag.childNodes.length === 2 && __isEmpty(frag.firstChild) && __isEmpty(frag.lastChild)) {
+      //   // 删除空行
+      //   // console.info('delete a line seperator');
+      //   // me.document.execCommand('delete', false, null);
+      //   rng.collapse(cursorToStart);
+      //   mobile.fixSelectionRange(sel, rng);
+      //   // RRRRRRRRRRRR
+      //   // rng = sel.getRangeAt(0);
+      //   // start = rng.startContainer;
+      //   // end = rng.endContainer;
+      //   // console.log('after delete line seperator\n', rng.startOffset, __toString(start), '\n', rng.endOffset, __toString(end));
+      //   // if(start && start.nodeType === 1 && start.tagName === 'R') {
+      //   //   var del = __createDel();
+      //   //   start.replaceWith(del);
+      //   //   del.appendChild(start);
+      //   // }
+      //   return;
+      // }
 
       // 保存删除前的状态
       var delFromPHead = __isPStart(start, rng.startOffset), delToPTail = __isPEnd(end, rng.endOffset);
-      var delFromPTail = __isPEnd(start, rng.startOffset), delToPHead = __isPStart(end, rng.endOffset);
+      var delFromPTail = false; //RRRRRRRR __isPEnd(start, rng.startOffset);
+      var delToPHead = __isPStart(end, rng.endOffset);
 
-      // console.log('delFromPHead', delFromPHead, 'delFromPTail', delFromPTail, 'delToPHead', delToPHead, 'delToPTail', delToPTail);
+      console.log('delFromPHead', delFromPHead, 'delFromPTail', delFromPTail, 'delToPHead', delToPHead, 'delToPTail', delToPTail);
 
       // 删除
       me.document.execCommand('delete', false, null);
@@ -700,7 +774,18 @@ function Revised(me) {
       if (__isEmpty(pnext)) {
         pnext.insertBefore(me.document.createTextNode(domUtils.fillChar), pnext.firstChild);
       }
+    } else {
+      var ins = __createIns();
+      ins.appendChild(me.document.createTextNode(domUtils.fillChar));
+      ins.appendChild(me.document.createElement('R'));
+      p.appendChild(ins);
+      var pnw = me.document.createElement('P');
+      pnw.appendChild(me.document.createElement('BR'));
+      p.parentNode.appendChild(pnw);
+      pnext = pnw;
     }
+    // if(pnext)    rng.setStart(pnext, 0);
+    // else rng.setStart(p, p.childNodes.length);
     rng.setStart(pnext, 0);
     rng.collapse(true);
     __shrink();

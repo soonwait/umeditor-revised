@@ -285,7 +285,7 @@ var dom = {
     if(!ignorePre && first && first.nodeType === 1 && first.previousSibling) {
       this.merge(first);
     }
-    if(ignorePre || !ignoreNext && last && last !== first && last.nodeType === 1 && last.nextSibling) {
+    if((ignorePre || !ignoreNext) && last && last !== first && last.nodeType === 1 && last.nextSibling) {
       this.merge(last);
     }
   },
